@@ -68,3 +68,57 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ error: 'Lỗi server khi đăng nhập' });
   }
 };
+
+// [GET] Lấy thông tin profile của người dùng hiện tại
+export const getProfile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId;
+    const result = await pool.query(
+      'SELECT id, email, full_name, role, created_at FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Người dùng không tìm thấy' });
+      return;
+    }
+
+    res.json({
+      message: 'Lấy profile thành công!',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Lỗi server khi lấy profile' });
+  }
+};
+
+// [PUT] Cập nhật role của người dùng (chỉ ADMIN)
+export const updateUserRole = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    // Validate role
+    if (!['ADMIN', 'STAFF', 'AGENT'].includes(role)) {
+      res.status(400).json({ error: 'Role không hợp lệ. Phải là ADMIN, STAFF hoặc AGENT' });
+      return;
+    }
+
+    const result = await pool.query(
+      'UPDATE users SET role = $1 WHERE id = $2 RETURNING id, email, full_name, role',
+      [role, userId]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Người dùng không tìm thấy' });
+      return;
+    }
+
+    res.json({
+      message: `Cập nhật role thành ${role} thành công!`,
+      user: result.rows[0]
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Lỗi server khi cập nhật role' });
+  }
+};
