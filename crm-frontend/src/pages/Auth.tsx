@@ -19,13 +19,13 @@ export default function Auth() {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
       const payload = isLogin ? { email, password } : { email, password, full_name: fullName };
 
-      const response = await axios.post(`http://localhost:3000${endpoint}`, payload);
+      const response = await axios.post(`http://localhost:5000${endpoint}`, payload);
 
       if (isLogin) {
         // Đăng nhập thành công -> Lưu Token vào LocalStorage và chuyển hướng vào Chat
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        localStorage.setItem('userRole', response.data.user.role);
+        localStorage.setItem('token', response.data.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.data.user));
+        localStorage.setItem('userRole', response.data.data.user.role);
         navigate('/'); 
       } else {
         // Đăng ký thành công -> Báo thành công và chuyển sang form đăng nhập
@@ -33,7 +33,11 @@ export default function Auth() {
         setIsLogin(true);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Có lỗi xảy ra, vui lòng thử lại!');
+      const errorMessage = 
+        err.response?.data?.message || 
+        err.response?.data?.error?.message ||
+        'Có lỗi xảy ra, vui lòng thử lại!';
+      setError(errorMessage);
     }
   };
 

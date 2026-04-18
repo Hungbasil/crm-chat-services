@@ -1,60 +1,98 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { createServer } from 'http';
-import { Server } from 'socket.io';   
-import pool from './config/db';
+import { Server } from 'socket.io';
+import path from 'path';
+
+// Import configurations
+import { config, validateConfig } from './common/config/config';
+import { getLogger } from './common/logger/Logger';
+
+// Import middleware
+import { authenticate, isAdminOrStaff, socketAuthWithRole } from './Middleware/auth';
+import { requestLogger } from './Middleware/logging';
+import {
+  errorHandler,
+  notFoundHandler,
+  asyncHandler
+} from './Middleware/errorHandler';
+import { normalRateLimit } from './Middleware/rateLimit';
+
+// Import routes
 import authRoutes from './Routes/auth';
 import dashboardRoutes from './Routes/dashboard';
-import { authenticate, isAdminOrStaff, socketAuthWithRole } from './Middleware/auth';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import jwt from 'jsonwebtoken';
-dotenv.config();
+import uploadRoutes from './Routes/upload';
+import chatRoutes from './Routes/chat';
 
+// Import services
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import pool from './config/db';
+import { ResponseHandler } from './common/response/ResponseHandler';
+
+// Validate configuration
+validateConfig();
+
+const logger = getLogger('Application');
 const app = express();
-const port = process.env.PORT || 3000;
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: config.cors.origin,
+    methods: ['GET', 'POST'],
+    credentials: config.cors.credentials
   }
 });
 
-app.use(cors());
+// ============= MIDDLEWARE STACK =============
+
+// Request logging
+app.use(requestLogger);
+
+// CORS
+app.use(
+  cors({
+    origin: config.cors.origin,
+    credentials: config.cors.credentials
+  })
+);
+
+// Body parser
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Static files
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// ============= HEALTH CHECK =============
+app.get('/health', (req, res) => {
+  ResponseHandler.success(res, { status: 'OK' }, 'Server is running');
+});
 
 app.get('/', (req, res) => {
-  res.send('Chào mừng đến với Hệ thống Backend CRM đa kênh!');
+  ResponseHandler.success(
+    res,
+    { version: '2.0', message: 'CRM Chat API - Restructured Edition' },
+    'Welcome to CRM Chat Service'
+  );
 });
 
-// API lấy lịch sử chat - cần xác thực
-app.get('/api/chat/:conversation_id', authenticate, async (req, res) => {
-  try {
-    const { conversation_id } = req.params;
-    const query = `
-      SELECT * FROM messages 
-      WHERE conversation_id = $1 
-      ORDER BY created_at ASC
-    `;
-    const result = await pool.query(query, [conversation_id]);
-    
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Lỗi khi tải lịch sử:', error);
-    res.status(500).json({ error: 'Không thể tải lịch sử tin nhắn' });
-  }
-});
-
+// ============= API ROUTES =============
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/files', uploadRoutes);
+app.use('/api/chat', chatRoutes);
 
-async function analyzeMessageWithAI(messageId: string, content: string, conversationId: string) {
+// ============= SOCKET.IO =============
+async function analyzeMessageWithAI(
+  messageId: string,
+  content: string,
+  conversationId: string
+): Promise<void> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    
+    const model = genAI.getGenerativeModel({ model: config.gemini.model });
+
     const prompt = `
       Phân tích tin nhắn của khách hàng sau: "${content}". 
       Hãy trả về kết quả định dạng JSON chuẩn xác với 2 trường:
@@ -69,19 +107,23 @@ async function analyzeMessageWithAI(messageId: string, content: string, conversa
     aiText = aiText.replace(/```json/g, '').replace(/```/g, '').trim();
     const aiAnalysisJson = JSON.parse(aiText);
 
-    const updateQuery = `UPDATE messages SET ai_analysis = $1 WHERE id = $2 RETURNING *;`;
-    await pool.query(updateQuery, [aiAnalysisJson, messageId]);
+    await pool.query(
+      'UPDATE messages SET ai_analysis = $1 WHERE id = $2',
+      [aiAnalysisJson, messageId]
+    );
 
-    io.emit('ai_analyzed', { 
-      message_id: messageId, 
+    io.emit('ai_analyzed', {
+      message_id: messageId,
       conversation_id: conversationId,
-      ai_data: aiAnalysisJson 
+      ai_data: aiAnalysisJson
     });
 
-    console.log('🤖 AI đã phân tích xong:', aiAnalysisJson);
-
-  } catch (error) {
-    console.error('⚠️ Lỗi khi gọi Gemini AI:', error);
+    logger.info('AI analysis completed', {
+      messageId,
+      sentiment: aiAnalysisJson.sentiment
+    });
+  } catch (error: any) {
+    logger.error('AI analysis failed', error);
   }
 }
 
@@ -89,46 +131,98 @@ io.use(socketAuthWithRole);
 
 io.on('connection', (socket) => {
   const userInfo = (socket as any).user;
-  console.log(`🔌 Client vừa kết nối! ID: ${socket.id} | User: ${userInfo.userId} | Role: ${userInfo.role}`);
+  logger.info('Client connected', { socketId: socket.id, userId: userInfo.userId });
 
   socket.on('send_message', async (data) => {
     try {
-      const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+      let parsedData;
+      try {
+        parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+      } catch (parseError: any) {
+        logger.error('Invalid JSON format', parseError);
+        socket.emit('error_message', { error: 'Invalid message format. Expected valid JSON.' });
+        return;
+      }
+      
       const { conversation_id, sender_type, content } = parsedData;
 
-      if (!conversation_id) throw new Error("Thiếu conversation_id");
-      
-      // Kiểm tra quyền: STAFF chỉ có thể gửi tin nhắn với sender_type = 'STAFF'
+      if (!conversation_id) {
+        throw new Error('Missing conversation_id');
+      }
+
       if (userInfo.role === 'STAFF' && sender_type !== 'STAFF') {
-        socket.emit('error_message', { error: 'STAFF chỉ có thể gửi tin nhắn dưới tên STAFF' });
+        socket.emit('error_message', {
+          error: 'Staff can only send messages as STAFF'
+        });
         return;
       }
 
-      const insertQuery = `
-        INSERT INTO messages (conversation_id, sender_type, content) 
-        VALUES ($1, $2, $3) RETURNING *;
-      `;
-      const result = await pool.query(insertQuery, [conversation_id, sender_type, content]);
+      const result = await pool.query(
+        'INSERT INTO messages (conversation_id, sender_type, content) VALUES ($1, $2, $3) RETURNING *',
+        [conversation_id, sender_type, content]
+      );
+
       const savedMessage = result.rows[0];
-      
-      console.log(`✉️  Nhận & Lưu tin nhắn từ ${socket.id} thành công!`);
+
+      logger.info('Message saved', {
+        messageId: savedMessage.id,
+        senderType: sender_type
+      });
 
       io.emit('receive_message', savedMessage);
+
       if (sender_type === 'CUSTOMER') {
         analyzeMessageWithAI(savedMessage.id, content, conversation_id);
       }
-
-    } catch (error) {
-      console.error('⚠️ Lỗi xử lý tin nhắn:', error);
-      socket.emit('error_message', { error: 'Không thể xử lý tin nhắn' });
+    } catch (error: any) {
+      logger.error('Message handling failed', error);
+      socket.emit('error_message', { error: error.message });
     }
   });
 
   socket.on('disconnect', () => {
-    console.log(`🔌 Client đã ngắt kết nối: ${socket.id}`);
+    logger.info('Client disconnected', { socketId: socket.id });
   });
 });
 
-httpServer.listen(port, () => {
-  console.log(` Server & Socket.io đang chạy tại: http://localhost:${port}`);
+// ============= ERROR HANDLING =============
+
+// 404 handler
+app.use(notFoundHandler);
+
+// Global error handler (must be last)
+app.use(errorHandler);
+
+// ============= SERVER STARTUP =============
+const server = httpServer.listen(config.port, '0.0.0.0', () => {
+  logger.info(`🚀 Server started`, {
+    port: config.port,
+    environment: config.nodeEnv,
+    database: `${config.database.host}:${config.database.port}/${config.database.name}`
+  });
 });
+
+// Allow socket reuse
+server.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.error(`Port ${config.port} already in use`);
+    process.exit(1);
+  }
+  throw err;
+});
+
+// Handle graceful shutdown
+const gracefulShutdown = () => {
+  logger.info('Shutting down gracefully...');
+  io.close();
+  server.close(() => {
+    logger.info('Server closed');
+    pool.end(() => {
+      logger.info('Database pool closed');
+      process.exit(0);
+    });
+  });
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);

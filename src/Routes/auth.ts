@@ -1,17 +1,17 @@
 import { Router } from 'express';
 import { register, login, getProfile, updateUserRole } from '../Controllers/auth';
 import { authenticate, isAdmin } from '../Middleware/auth';
+import { validateBody, validateParams } from '../Middleware/validation';
+import { strictRateLimit } from '../Middleware/rateLimit';
 
 const router = Router();
 
-// Công khai - không cần xác thực
-router.post('/register', register);
-router.post('/login', login);
+// Public endpoints - with strict rate limiting
+router.post('/register', strictRateLimit, validateBody(['email', 'password', 'full_name']), register);
+router.post('/login', strictRateLimit, validateBody(['email', 'password']), login);
 
-// Cần xác thực
+// Protected endpoints
 router.get('/profile', authenticate, getProfile);
-
-// Chỉ ADMIN mới có quyền thay đổi role
-router.put('/users/:userId/role', authenticate, isAdmin, updateUserRole);
+router.put('/users/:userId/role', authenticate, isAdmin, validateParams(['userId']), validateBody(['role']), updateUserRole);
 
 export default router;

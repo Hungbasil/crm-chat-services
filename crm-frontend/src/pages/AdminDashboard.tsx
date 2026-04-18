@@ -66,10 +66,11 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3000/api/dashboard/stats', {
+      const response = await axios.get('http://localhost:5000/api/dashboard/stats', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setDashboardData(response.data);
+      // API returns wrapped response: { success, code, message, data: {...stats}, timestamp }
+      setDashboardData(response.data.data);
       setError(null);
     } catch (err) {
       console.error('Lỗi tải dashboard:', err);

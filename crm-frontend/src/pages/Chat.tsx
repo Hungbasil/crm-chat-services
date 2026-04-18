@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client'; // Import thêm type Socket
 import axios from 'axios';
-import { Send, Bot, Headset, LogOut, Settings } from 'lucide-react';
+import { Send, Bot, Headset, LogOut, Settings, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface AiAnalysis {
@@ -14,6 +14,7 @@ interface Message {
   content: string;
   sender_type: 'CUSTOMER' | 'STAFF';
   ai_analysis?: AiAnalysis;
+  is_image?: boolean;
 }
 
 export default function Chat() {
@@ -22,11 +23,13 @@ export default function Chat() {
   const [senderRole, setSenderRole] = useState<'CUSTOMER' | 'STAFF'>('CUSTOMER');
   const [userRole, setUserRole] = useState<string>('');
   const [userName, setUserName] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
   const navigate = useNavigate();
   
   // Dùng useRef để giữ kết nối socket không bị reset khi render lại
   const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ID của phiên chat từ database - thay đổi nếu cần test với phiên khác
   const CONVERSATION_ID = "766434e8-97fd-45e4-ac30-c76e16495294";
@@ -34,7 +37,7 @@ export default function Chat() {
   useEffect(() => {
     // Lấy thông tin user từ localStorage
     const userStr = localStorage.getItem('user');
-    if (userStr) {
+    if (userStr && userStr !== 'undefined') {
       try {
         const user = JSON.parse(userStr);
         setUserRole(user.role);
@@ -45,7 +48,12 @@ export default function Chat() {
         }
       } catch (error) {
         console.error('Lỗi parse user data:', error);
+        // Redirect to login if user data is corrupted
+        window.location.href = '/login';
       }
+    } else {
+      // No user data found, redirect to login
+      window.location.href = '/login';
     }
   }, []);
 
@@ -56,13 +64,27 @@ export default function Chat() {
   useEffect(() => {
     // 1. Lấy Token từ LocalStorage
     const token = localStorage.getItem('token');
+    
+    if (!token) {
+      console.error('No token found, redirecting to login');
+      window.location.href = '/login';
+      return;
+    }
 
     // 2. Khởi tạo Socket và nhét Token vào phần auth (Xác thực)
-    socketRef.current = io('http://localhost:3000', {
-      auth: { token }
+    socketRef.current = io('http://localhost:5000', {
+      auth: { token },
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5
     });
 
     const socket = socketRef.current;
+
+    socket.on('connect', () => {
+      console.log('Socket connected successfully');
+    });
 
     socket.on('receive_message', (newMessage: Message) => {
       setMessages((prev) => [...prev, newMessage]);
@@ -78,7 +100,7 @@ export default function Chat() {
 
     socket.on('connect_error', (err) => {
       console.error("Lỗi kết nối Socket:", err.message);
-      if (err.message.includes('Authentication error')) {
+      if (err.message.includes('Authentication error') || err.message.includes('jwt')) {
         alert('Phiên đăng nhập hết hạn!');
         window.location.href = '/login';
       }
@@ -94,14 +116,25 @@ export default function Chat() {
     const fetchHistory = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`http://localhost:3000/api/chat/${CONVERSATION_ID}`, {
+        if (!token) {
+          console.warn('No token available for fetching chat history');
+          return;
+        }
+
+        const response = await axios.get(`http://localhost:5000/api/chat/${CONVERSATION_ID}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         });
-        setMessages(response.data);
-      } catch (error) {
+        // Handle new response format with data wrapper
+        const data = response.data.data || response.data;
+        setMessages(Array.isArray(data) ? data : []);
+      } catch (error: any) {
         console.error("Lỗi tải lịch sử chat:", error);
+        // Handle 404 gracefully if chat endpoint doesn't exist
+        if (error.response?.status === 404) {
+          setMessages([]);
+        }
       }
     };
     fetchHistory();
@@ -119,6 +152,61 @@ export default function Chat() {
     // Dùng socketRef.current để gửi
     socketRef.current.emit('send_message', dataToSend);
     setInputValue(''); 
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Chỉ cho phép upload file ảnh (JPEG, PNG, GIF, WebP)');
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Kích thước file không được vượt quá 5MB');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('conversation_id', CONVERSATION_ID);
+      formData.append('sender_type', senderRole);
+
+      const token = localStorage.getItem('token');
+      const response = await axios.post('http://localhost:5000/api/files/upload-image', formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      // Thêm message ảnh vào chat
+      const imageMessage: Message = {
+        id: response.data.data.id,
+        content: response.data.data.content,
+        sender_type: senderRole,
+        is_image: true
+      };
+      
+      setMessages((prev) => [...prev, imageMessage]);
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+    } catch (error) {
+      console.error('Lỗi upload ảnh:', error);
+      alert('Có lỗi khi upload ảnh. Vui lòng thử lại!');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -188,7 +276,16 @@ export default function Chat() {
                 </span>
 
                 <div className={`p-3 rounded-2xl ${msg.sender_type === 'CUSTOMER' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-700 text-slate-100 rounded-bl-none'}`}>
-                  {msg.content}
+                  {msg.is_image ? (
+                    <img 
+                      src={msg.content} 
+                      alt="Chat image" 
+                      className="max-w-xs max-h-80 rounded-lg object-cover cursor-pointer hover:opacity-80 transition"
+                      onClick={() => window.open(msg.content, '_blank')}
+                    />
+                  ) : (
+                    msg.content
+                  )}
                 </div>
 
                 {msg.ai_analysis && msg.sender_type === 'CUSTOMER' && (
@@ -224,6 +321,30 @@ export default function Chat() {
               🎧 Gửi tin nhắn dưới tên Nhân viên
             </div>
           )}
+
+          {/* File Upload Input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileUpload}
+            className="hidden"
+            disabled={isUploading}
+          />
+
+          {/* Upload Button */}
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 text-white p-3 rounded-lg transition-colors flex items-center justify-center"
+            title="Upload ảnh"
+          >
+            {isUploading ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <Upload className="w-5 h-5" />
+            )}
+          </button>
 
           <input
             type="text"
