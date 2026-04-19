@@ -14,6 +14,36 @@ export const getStats = asyncHandler(
 );
 
 /**
+ * [GET] Get Online Staff Count
+ */
+export const getOnlineStaffCount = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const count = await DashboardService.getOnlineStaffCount();
+    ResponseHandler.success(res, { count }, 'Online staff count retrieved successfully');
+  }
+);
+
+/**
+ * [GET] Get Active Chats Count
+ */
+export const getActiveChatsCount = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const count = await DashboardService.getActiveChatsCount();
+    ResponseHandler.success(res, { count }, 'Active chats count retrieved successfully');
+  }
+);
+
+/**
+ * [GET] Get Satisfaction Rate
+ */
+export const getSatisfactionRate = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const rate = await DashboardService.calculateSatisfactionRate();
+    ResponseHandler.success(res, { rate }, 'Satisfaction rate retrieved successfully');
+  }
+);
+
+/**
  * [GET] Get Sentiment Analysis
  */
 export const getSentimentAnalysis = asyncHandler(

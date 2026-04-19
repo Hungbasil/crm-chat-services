@@ -207,4 +207,37 @@ export class AuthService {
       throw new DatabaseError('Failed to update role', error);
     }
   }
+
+  /**
+   * Update staff activity timestamp (last_activity)
+   */
+  static async updateLastActivity(userId: string) {
+    try {
+      Validator.uuid(userId, 'User ID');
+
+      logger.debug('Updating last activity', { userId });
+
+      const result = await pool.query(
+        'UPDATE users SET last_activity = NOW() WHERE id = $1 RETURNING id, full_name, role, last_activity',
+        [userId]
+      );
+
+      if (result.rows.length === 0) {
+        logger.warn('User not found for activity update', { userId });
+        throw new NotFoundError('User');
+      }
+
+      return {
+        message: 'Activity updated successfully',
+        user: result.rows[0]
+      };
+    } catch (error: any) {
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+      logger.error('Update activity error', error);
+      // Don't throw error - activity update is non-critical
+      return null;
+    }
+  }
 }

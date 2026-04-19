@@ -14,6 +14,66 @@ const logger = getLogger('DashboardService');
  */
 export class DashboardService {
   /**
+   * Get online staff count
+   */
+  static async getOnlineStaffCount(): Promise<number> {
+    try {
+      const result = await pool.query(
+        `SELECT COUNT(*) as count FROM users 
+        WHERE role IN ('ADMIN', 'STAFF') 
+        AND last_activity > NOW() - INTERVAL '15 minutes'`
+      );
+      return parseInt(result.rows[0].count, 10);
+    } catch (error: any) {
+      logger.error('Error fetching online staff count', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get active conversations count
+   */
+  static async getActiveChatsCount(): Promise<number> {
+    try {
+      const result = await pool.query(
+        `SELECT COUNT(*) as count FROM conversations 
+        WHERE status = 'ACTIVE' OR status = 'OPEN'`
+      );
+      return parseInt(result.rows[0].count, 10);
+    } catch (error: any) {
+      logger.error('Error fetching active chats count', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Calculate satisfaction rate based on sentiment
+   */
+  static async calculateSatisfactionRate(): Promise<number> {
+    try {
+      const result = await pool.query(
+        `SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN (ai_analysis->>'sentiment') IN ('positive', 'POSITIVE', 'HAPPY', 'SATISFIED') 
+            THEN 1 ELSE 0 END) as positive_count
+        FROM messages
+        WHERE ai_analysis IS NOT NULL 
+          AND ai_analysis->>'sentiment' IS NOT NULL`
+      );
+      
+      const row = result.rows[0];
+      const total = parseInt(row.total, 10);
+      const positive = parseInt(row.positive_count, 10) || 0;
+      
+      if (total === 0) return 0;
+      return Math.round((positive / total) * 100);
+    } catch (error: any) {
+      logger.error('Error calculating satisfaction rate', error);
+      return 0;
+    }
+  }
+
+  /**
    * Get all dashboard statistics
    */
   static async getDashboardStats(): Promise<DashboardStatsResponseDTO> {
@@ -26,7 +86,16 @@ export class DashboardService {
       );
       const totalMessages = parseInt(totalMessagesResult.rows[0].total, 10);
 
-      // 2. Sentiment analysis
+      // 2. Online staff count
+      const onlineStaffCount = await this.getOnlineStaffCount();
+
+      // 3. Active chats count
+      const activeChatsCount = await this.getActiveChatsCount();
+
+      // 4. Satisfaction rate
+      const satisfactionRate = await this.calculateSatisfactionRate();
+
+      // 5. Sentiment analysis
       const sentimentResult = await pool.query(
         `SELECT 
           (ai_analysis->>'sentiment') as sentiment,
@@ -39,7 +108,7 @@ export class DashboardService {
       );
       const sentimentAnalysis = sentimentResult.rows;
 
-      // 3. Recent conversations
+      // 6. Recent conversations
       const recentConversationsResult = await pool.query(
         `SELECT 
           c.id,
@@ -56,7 +125,7 @@ export class DashboardService {
       );
       const recentConversations = recentConversationsResult.rows;
 
-      // 4. Message trend (7 days)
+      // 7. Message trend (7 days)
       const messageTrendResult = await pool.query(
         `SELECT 
           DATE(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') as date,
@@ -68,9 +137,14 @@ export class DashboardService {
       );
       const messageTrend = messageTrendResult.rows;
 
-      // 5. Staff list
+      // 8. Staff list with online status
       const staffListResult = await pool.query(
-        `SELECT id, full_name, role, created_at
+        `SELECT 
+          id, 
+          full_name, 
+          role, 
+          (last_activity > NOW() - INTERVAL '15 minutes') as is_online,
+          created_at
         FROM users
         WHERE role IN ('ADMIN', 'STAFF')
         ORDER BY created_at DESC`
@@ -81,6 +155,9 @@ export class DashboardService {
 
       return {
         totalMessages,
+        onlineStaffCount,
+        activeChatsCount,
+        satisfactionRate,
         sentimentAnalysis,
         recentConversations,
         messageTrend,

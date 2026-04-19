@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import API_ENDPOINTS from '../config/api';
 import StatCard from '../components/StatCard';
 import ChatTable from '../components/ChatTable';
 import StaffList from '../components/StaffList';
@@ -66,7 +67,7 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/dashboard/stats', {
+      const response = await axios.get(API_ENDPOINTS.DASHBOARD.STATS, {
         headers: { Authorization: `Bearer ${token}` }
       });
       // API returns wrapped response: { success, code, message, data: {...stats}, timestamp }
@@ -88,10 +89,10 @@ export default function AdminDashboard() {
   };
 
   const navItems = [
-    { icon: LayoutDashboard, label: 'Tổng quan', href: '#' },
-    { icon: MessageSquare, label: 'Danh sách Chat', href: '#' },
-    { icon: Users, label: 'Quản lý Nhân viên', href: '#' },
-    { icon: Settings, label: 'Cấu hình AI', href: '#' },
+    { icon: LayoutDashboard, label: 'Tổng quan', href: '/admin' },
+    { icon: MessageSquare, label: 'Danh sách Chat', href: '/chat-list' },
+    { icon: Users, label: 'Quản lý Nhân viên', href: '/admin' },
+    { icon: Settings, label: 'Cấu hình AI', href: '/admin' },
   ];
 
   const satisfactionRate = dashboardData?.sentimentAnalysis
@@ -151,16 +152,16 @@ export default function AdminDashboard() {
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2">
           {navItems.map((item, idx) => (
-            <a
+            <button
               key={idx}
-              href={item.href}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-700 transition group cursor-pointer"
+              onClick={() => navigate(item.href)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-700 transition group cursor-pointer text-left"
             >
               <item.icon size={20} className="text-blue-400 group-hover:text-blue-300" />
               {sidebarOpen && (
                 <span className="group-hover:text-blue-300 transition">{item.label}</span>
               )}
-            </a>
+            </button>
           ))}
         </nav>
 

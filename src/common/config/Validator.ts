@@ -114,4 +114,26 @@ export class Validator {
       );
     }
   }
+
+  /**
+   * Validate number value
+   */
+  static number(
+    value: any,
+    fieldName: string = 'value',
+    minValue?: number,
+    maxValue?: number
+  ): void {
+    if (typeof value !== 'number' || isNaN(value)) {
+      throw new ValidationError(`${fieldName} must be a valid number`);
+    }
+
+    if (minValue !== undefined && value < minValue) {
+      throw new ValidationError(`${fieldName} must be at least ${minValue}`);
+    }
+
+    if (maxValue !== undefined && value > maxValue) {
+      throw new ValidationError(`${fieldName} must not exceed ${maxValue}`);
+    }
+  }
 }

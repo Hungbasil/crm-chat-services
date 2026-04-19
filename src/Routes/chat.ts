@@ -2,7 +2,8 @@ import { Router } from 'express';
 import {
   getConversationMessages,
   getMessageById,
-  getRecentConversations
+  getRecentConversations,
+  getChatList
 } from '../Controllers/chat';
 import { authenticate } from '../Middleware/auth';
 import { validateParams, validateQuery } from '../Middleware/validation';
@@ -10,12 +11,19 @@ import { relaxedRateLimit } from '../Middleware/rateLimit';
 
 const router = Router();
 
+// [GET] Get paginated chat list
+router.get(
+  '/list',
+  authenticate,
+  relaxedRateLimit,
+  getChatList
+);
+
 // [GET] Get recent conversations
 router.get(
   '/conversations',
   authenticate,
   relaxedRateLimit,
-  validateQuery(['limit']),
   getRecentConversations
 );
 

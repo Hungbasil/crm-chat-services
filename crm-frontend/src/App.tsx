@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Auth from './pages/Auth';
 import Chat from './pages/Chat';
+import ChatList from './pages/ChatList';
 import AdminDashboard from './pages/AdminDashboard';
 import type { ReactNode } from 'react';
 
@@ -59,7 +60,27 @@ function App() {
           } 
         />
 
-        {/* Chat Page */}
+        {/* Chat List Page */}
+        <Route 
+          path="/chat-list" 
+          element={
+            <ProtectedRoute>
+              <ChatList />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Chat Page - Individual Conversation */}
+        <Route 
+          path="/chat/:conversationId" 
+          element={
+            <ProtectedRoute>
+              <Chat />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Chat Page - Default */}
         <Route 
           path="/" 
           element={

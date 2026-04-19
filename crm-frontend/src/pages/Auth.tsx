@@ -2,6 +2,7 @@ import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, User } from 'lucide-react';
+import API_ENDPOINTS from '../config/api';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -16,10 +17,10 @@ export default function Auth() {
     setError('');
 
     try {
-      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+      const endpoint = isLogin ? API_ENDPOINTS.AUTH.LOGIN : API_ENDPOINTS.AUTH.REGISTER;
       const payload = isLogin ? { email, password } : { email, password, full_name: fullName };
 
-      const response = await axios.post(`http://localhost:5000${endpoint}`, payload);
+      const response = await axios.post(endpoint, payload);
 
       if (isLogin) {
         // Đăng nhập thành công -> Lưu Token vào LocalStorage và chuyển hướng vào Chat

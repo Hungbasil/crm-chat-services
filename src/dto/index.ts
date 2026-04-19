@@ -27,6 +27,19 @@ export interface UpdateUserRoleDTO {
   role: 'ADMIN' | 'STAFF' | 'AGENT';
 }
 
+export interface StaffActivityDTO {
+  user_id: string;
+  activity_type: 'LOGIN' | 'LOGOUT' | 'IDLE' | 'ACTIVE';
+}
+
+export interface StaffStatusDTO {
+  id: string;
+  full_name: string;
+  role: string;
+  is_online: boolean;
+  last_activity: string;
+}
+
 /**
  * Chat DTOs
  */
@@ -47,6 +60,27 @@ export interface MessageResponseDTO {
     intent: string;
   };
   created_at: string;
+}
+
+export interface ChatListItemDTO {
+  id: string;
+  customer_id: string;
+  customer_name: string;
+  channel: string;
+  status: string;
+  latest_message: string;
+  latest_sentiment: string;
+  created_at: string;
+  updated_at: string;
+  total_messages: number;
+}
+
+export interface PaginatedChatListDTO {
+  data: ChatListItemDTO[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 /**
@@ -78,6 +112,9 @@ export interface FileUploadResponseDTO {
 
 export interface DashboardStatsResponseDTO {
   totalMessages: number;
+  onlineStaffCount: number;
+  activeChatsCount: number;
+  satisfactionRate: number;
   sentimentAnalysis: Array<{
     sentiment: string;
     count: number;
@@ -98,6 +135,7 @@ export interface DashboardStatsResponseDTO {
     id: string;
     full_name: string;
     role: string;
+    is_online: boolean;
     created_at: string;
   }>;
 }

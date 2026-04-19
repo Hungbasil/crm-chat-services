@@ -45,3 +45,25 @@ export const getRecentConversations = asyncHandler(
     ResponseHandler.success(res, conversations, 'Conversations retrieved successfully');
   }
 );
+
+/**
+ * [GET] Get paginated chat list
+ */
+export const getChatList = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    let page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+    let limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+    const status = req.query.status as string | undefined;
+
+    // Validate pagination parameters
+    if (isNaN(page) || page < 1) {
+      page = 1;
+    }
+    if (isNaN(limit) || limit < 1 || limit > 100) {
+      limit = 10;
+    }
+
+    const result = await ChatService.getChatList(page, limit, status);
+    ResponseHandler.success(res, result, 'Chat list retrieved successfully');
+  }
+);

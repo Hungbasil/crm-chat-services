@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client'; // Import thêm type Socket
 import axios from 'axios';
-import { Send, Bot, Headset, LogOut, Settings, Upload } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Send, Bot, Headset, LogOut, Settings, Upload, ChevronLeft, MessageSquare } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import API_ENDPOINTS, { API_BASE_URL } from '../config/api';
 
 interface AiAnalysis {
   sentiment: string;
@@ -25,6 +26,7 @@ export default function Chat() {
   const [userName, setUserName] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
   const navigate = useNavigate();
+  const { conversationId } = useParams();
   
   // Dùng useRef để giữ kết nối socket không bị reset khi render lại
   const socketRef = useRef<Socket | null>(null);
@@ -32,7 +34,8 @@ export default function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ID của phiên chat từ database - thay đổi nếu cần test với phiên khác
-  const CONVERSATION_ID = "766434e8-97fd-45e4-ac30-c76e16495294";
+  // Use URL param if provided, otherwise use default
+  const CONVERSATION_ID = conversationId || "766434e8-97fd-45e4-ac30-c76e16495294";
 
   useEffect(() => {
     // Lấy thông tin user từ localStorage
@@ -72,7 +75,7 @@ export default function Chat() {
     }
 
     // 2. Khởi tạo Socket và nhét Token vào phần auth (Xác thực)
-    socketRef.current = io('http://localhost:5000', {
+    socketRef.current = io(API_BASE_URL, {
       auth: { token },
       reconnection: true,
       reconnectionDelay: 1000,
@@ -121,7 +124,7 @@ export default function Chat() {
           return;
         }
 
-        const response = await axios.get(`http://localhost:5000/api/chat/${CONVERSATION_ID}`, {
+        const response = await axios.get(API_ENDPOINTS.CHAT.MESSAGES(CONVERSATION_ID), {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -179,7 +182,7 @@ export default function Chat() {
       formData.append('sender_type', senderRole);
 
       const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:5000/api/files/upload-image', formData, {
+      const response = await axios.post(API_ENDPOINTS.FILES.UPLOAD_IMAGE, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -224,6 +227,15 @@ export default function Chat() {
         
         <div className="bg-slate-700 p-4 flex items-center justify-between border-b border-slate-600">
           <div className="flex items-center gap-3">
+            {conversationId && (
+              <button
+                onClick={() => navigate('/chat-list')}
+                className="text-slate-300 hover:text-white transition p-1"
+                title="Quay lại danh sách chat"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            )}
             <div className="bg-green-500 p-2 rounded-full">
               <Headset className="text-white w-6 h-6" />
             </div>
@@ -244,6 +256,15 @@ export default function Chat() {
                 {userRole === 'STAFF' ? '👤 Nhân viên' : '👥 Khách hàng'}
               </p>
             </div>
+            {!conversationId && (
+              <button 
+                onClick={() => navigate('/chat-list')}
+                className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg transition-colors flex items-center gap-1"
+                title="Danh sách Chat"
+              >
+                <MessageSquare className="w-4 h-4" />
+              </button>
+            )}
             {userRole === 'ADMIN' && (
               <button 
                 onClick={() => navigate('/admin')}

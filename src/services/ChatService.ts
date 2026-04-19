@@ -15,6 +15,27 @@ export interface MessageResponse {
   created_at: string;
 }
 
+export interface ChatListItemResponse {
+  id: string;
+  customer_id: string;
+  customer_name: string;
+  channel: string;
+  status: string;
+  latest_message: string;
+  latest_sentiment: string;
+  created_at: string;
+  updated_at: string;
+  total_messages: number;
+}
+
+export interface PaginatedChatListResponse {
+  data: ChatListItemResponse[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 /**
  * Chat Service - Handle messaging operations
  */
@@ -113,6 +134,89 @@ export class ChatService {
     } catch (error: any) {
       logger.error('Get conversations error', error);
       throw new DatabaseError('Failed to fetch conversations', error);
+    }
+  }
+
+  /**
+   * Get paginated chat list with latest message and sentiment
+   */
+  static async getChatList(
+    page: number = 1,
+    limit: number = 10,
+    status?: string
+  ): Promise<PaginatedChatListResponse> {
+    try {
+      // Validate pagination parameters
+      Validator.number(page, 'Page', 1);
+      Validator.number(limit, 'Limit', 1, 100);
+
+      const offset = (page - 1) * limit;
+
+      logger.debug('Fetching chat list', { page, limit, offset, status });
+
+      // Build dynamic query
+      let whereClause = '';
+      const queryParams: any[] = [];
+
+      if (status) {
+        whereClause = 'WHERE c.status = $1';
+        queryParams.push(status);
+      }
+
+      // Get total count
+      const countResult = await pool.query(
+        `SELECT COUNT(*) as total FROM conversations c ${whereClause}`,
+        queryParams
+      );
+      const total = parseInt(countResult.rows[0].total, 10);
+
+      // Get paginated results with latest message and sentiment
+      const paramIndex = queryParams.length + 1;
+      const query = `
+        SELECT 
+          c.id,
+          c.customer_id,
+          COALESCE(cu.name, 'Unknown Customer') as customer_name,
+          COALESCE(c.channel, 'WEBSITE') as channel,
+          c.status,
+          COALESCE(m.content, '') as latest_message,
+          COALESCE(m.ai_analysis->>'sentiment', 'trung tính') as latest_sentiment,
+          c.created_at,
+          c.created_at as updated_at,
+          (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id) as total_messages
+        FROM conversations c
+        LEFT JOIN customers cu ON c.customer_id = cu.id
+        LEFT JOIN LATERAL (
+          SELECT content, ai_analysis
+          FROM messages
+          WHERE conversation_id = c.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) m ON true
+        ${whereClause}
+        ORDER BY c.created_at DESC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `;
+
+      const dataResult = await pool.query(query, [...queryParams, limit, offset]);
+
+      logger.info('Chat list fetched', {
+        page,
+        limit,
+        total,
+        count: dataResult.rows.length,
+      });
+
+      return {
+        data: dataResult.rows,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error: any) {
+      logger.error('Get chat list error', error);
+      throw new DatabaseError('Failed to fetch chat list', error);
     }
   }
 }

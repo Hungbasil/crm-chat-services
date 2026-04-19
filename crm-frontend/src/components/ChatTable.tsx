@@ -60,9 +60,10 @@ export default function ChatTable({ conversations }: ChatTableProps) {
           </tr>
         </thead>
         <tbody>
-          {conversations.map((conv, idx) => (
+          {conversations.map((conv: any, idx) => (
             <tr
               key={idx}
+              data-conversation-id={conv.id}
               className="border-b border-slate-700 hover:bg-slate-700/50 transition cursor-pointer"
             >
               <td className="px-4 py-3 font-medium text-white group-hover:text-blue-300">

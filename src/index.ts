@@ -11,6 +11,7 @@ import { getLogger } from './common/logger/Logger';
 // Import middleware
 import { authenticate, isAdminOrStaff, socketAuthWithRole } from './Middleware/auth';
 import { requestLogger } from './Middleware/logging';
+import { activityTracker } from './Middleware/activityTracker';
 import {
   errorHandler,
   notFoundHandler,
@@ -61,6 +62,9 @@ app.use(
 // Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Activity tracking (must come after JSON parser and authentication headers are available)
+app.use(activityTracker);
 
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

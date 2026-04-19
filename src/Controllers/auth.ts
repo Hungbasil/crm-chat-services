@@ -57,3 +57,18 @@ export const updateUserRole = asyncHandler(
     ResponseHandler.success(res, result.user, result.message);
   }
 );
+
+/**
+ * [POST] Update Staff Activity Status
+ */
+export const updateStaffActivity = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const userId = req.userId!;
+    const result = await AuthService.updateLastActivity(userId);
+    if (result) {
+      ResponseHandler.success(res, result.user, result.message);
+    } else {
+      ResponseHandler.success(res, { userId }, 'Activity tracked');
+    }
+  }
+);
