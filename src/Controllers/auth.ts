@@ -1,70 +1,126 @@
 import { Request, Response } from 'express';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-import pool from '../config/db';
+import { ResponseHandler } from '../common/response/ResponseHandler';
+import { asyncHandler } from '../Middleware/errorHandler';
+import { AuthService } from '../services/AuthService';
+import {
+  RegisterRequestDTO,
+  LoginRequestDTO,
+  UpdateUserRoleDTO
+} from '../dto';
 
-// [POST] API Đăng ký tài khoản
-export const register = async (req: Request, res: Response): Promise<void> => {
-  const { email, password, full_name } = req.body;
-
-  try {
-    const userExists = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (userExists.rows.length > 0) {
-      res.status(400).json({ error: 'Email này đã được sử dụng!' });
-      return;
-    }
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    const newUser = await pool.query(
-      'INSERT INTO users (email, password_hash, full_name) VALUES ($1, $2, $3) RETURNING id, email, full_name, role',
-      [email, hashedPassword, full_name]
-    );
-
-    res.status(201).json({
-      message: 'Đăng ký thành công!',
-      user: newUser.rows[0]
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Lỗi server khi đăng ký' });
+/**
+ * [POST] Register
+ */
+export const register = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const dto: RegisterRequestDTO = req.body;
+    const result = await AuthService.register(dto);
+    ResponseHandler.created(res, result.user, result.message);
   }
-};
+);
 
-// [POST] API Đăng nhập
-export const login = async (req: Request, res: Response): Promise<void> => {
-  const { email, password } = req.body;
-
-  try {
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) {
-      res.status(401).json({ error: 'Email hoặc mật khẩu không đúng!' });
-      return;
-    }
-
-    const user = result.rows[0];
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) {
-      res.status(401).json({ error: 'Email hoặc mật khẩu không đúng!' });
-      return;
-    }
-
-    const token = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_SECRET as string,
-      { expiresIn: '1d' }
-    );
-
-    res.json({
-      message: 'Đăng nhập thành công!',
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Lỗi server khi đăng nhập' });
+/**
+ * [POST] Login
+ */
+export const login = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const dto: LoginRequestDTO = req.body;
+    const result = await AuthService.login(dto);
+    ResponseHandler.success(res, {
+      token: result.token,
+      user: result.user
+    }, result.message);
   }
-};
+);
+
+/**
+ * [GET] Profile
+ */
+export const getProfile = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const userId = req.userId!;
+    const result = await AuthService.getProfile(userId);
+    ResponseHandler.success(res, result.user, result.message);
+  }
+);
+
+/**
+ * [PUT] Update User Role
+ */
+export const updateUserRole = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const userId = Array.isArray(req.params.userId)
+      ? req.params.userId[0]
+      : req.params.userId;
+    const dto: UpdateUserRoleDTO = req.body;
+    const result = await AuthService.updateUserRole(userId, dto);
+    ResponseHandler.success(res, result.user, result.message);
+  }
+);
+
+/**
+ * [POST] Update Staff Activity Status
+ */
+export const updateStaffActivity = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const userId = req.userId!;
+    const result = await AuthService.updateLastActivity(userId);
+    if (result) {
+      ResponseHandler.success(res, result.user, result.message);
+    } else {
+      ResponseHandler.success(res, { userId }, 'Activity tracked');
+    }
+  }
+);
+
+/**
+ * [GET] Staff List (Admin only)
+ */
+export const getStaffList = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    let searchTerm: string | undefined;
+    if (Array.isArray(req.query.search)) {
+      searchTerm = req.query.search[0] as string | undefined;
+    } else if (typeof req.query.search === 'string') {
+      searchTerm = req.query.search;
+    }
+
+    let role: string | undefined;
+    if (Array.isArray(req.query.role)) {
+      role = req.query.role[0] as string | undefined;
+    } else if (typeof req.query.role === 'string') {
+      role = req.query.role;
+    }
+
+    const result = await AuthService.getStaffList(searchTerm, role);
+    ResponseHandler.success(res, result.staff, result.message);
+  }
+);
+
+/**
+ * [GET] Staff Member By ID (Admin only)
+ */
+export const getStaffById = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const staffId = Array.isArray(req.params.staffId)
+      ? req.params.staffId[0]
+      : req.params.staffId;
+
+    const result = await AuthService.getStaffById(staffId);
+    ResponseHandler.success(res, result.staff, result.message);
+  }
+);
+
+/**
+ * [DELETE] Staff Member (Admin only)
+ */
+export const deleteStaff = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const staffId = Array.isArray(req.params.staffId)
+      ? req.params.staffId[0]
+      : req.params.staffId;
+
+    const result = await AuthService.deleteStaff(staffId);
+    ResponseHandler.success(res, result.staff, result.message);
+  }
+);
