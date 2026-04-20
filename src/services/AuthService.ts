@@ -240,4 +240,107 @@ export class AuthService {
       return null;
     }
   }
+
+  /**
+   * Get all staff members (Admin only)
+   */
+  static async getStaffList(searchTerm?: string, role?: string) {
+    try {
+      logger.info('Fetching staff list', { searchTerm, role });
+
+      let query =
+        'SELECT id, email, full_name, role, created_at, last_activity FROM users WHERE 1=1';
+      const params: any[] = [];
+
+      if (searchTerm) {
+        query += ' AND (full_name ILIKE $' + (params.length + 1) + ' OR email ILIKE $' + (params.length + 1) + ')';
+        params.push(`%${searchTerm}%`);
+      }
+
+      if (role) {
+        query += ' AND role = $' + (params.length + 1);
+        params.push(role);
+      }
+
+      query += ' ORDER BY created_at DESC';
+
+      const result = await pool.query(query, params);
+
+      logger.info('Staff list retrieved', { count: result.rows.length });
+
+      return {
+        message: 'Staff list retrieved successfully',
+        staff: result.rows,
+        count: result.rows.length
+      };
+    } catch (error: any) {
+      logger.error('Get staff list error', error);
+      throw new DatabaseError('Failed to retrieve staff list', error);
+    }
+  }
+
+  /**
+   * Get staff member by ID (Admin only)
+   */
+  static async getStaffById(staffId: string) {
+    try {
+      Validator.uuid(staffId, 'Staff ID');
+
+      logger.debug('Fetching staff member', { staffId });
+
+      const result = await pool.query(
+        'SELECT id, email, full_name, role, created_at, last_activity FROM users WHERE id = $1',
+        [staffId]
+      );
+
+      if (result.rows.length === 0) {
+        throw new NotFoundError('Staff member');
+      }
+
+      return {
+        message: 'Staff member retrieved successfully',
+        staff: result.rows[0]
+      };
+    } catch (error: any) {
+      if (error instanceof ValidationError || error instanceof NotFoundError) {
+        throw error;
+      }
+      logger.error('Get staff member error', error);
+      throw new DatabaseError('Failed to retrieve staff member', error);
+    }
+  }
+
+  /**
+   * Delete staff member (Admin only)
+   */
+  static async deleteStaff(staffId: string) {
+    try {
+      Validator.uuid(staffId, 'Staff ID');
+
+      logger.info('Deleting staff member', { staffId });
+
+      const result = await pool.query(
+        'DELETE FROM users WHERE id = $1 RETURNING id, email, full_name, role',
+        [staffId]
+      );
+
+      if (result.rows.length === 0) {
+        throw new NotFoundError('Staff member');
+      }
+
+      const deletedStaff = result.rows[0];
+      logger.info('Staff member deleted successfully', { staffId });
+
+      return {
+        message: 'Staff member deleted successfully',
+        staff: deletedStaff
+      };
+    } catch (error: any) {
+      if (error instanceof ValidationError || error instanceof NotFoundError) {
+        throw error;
+      }
+      logger.error('Delete staff member error', error);
+      throw new DatabaseError('Failed to delete staff member', error);
+    }
+  }
 }

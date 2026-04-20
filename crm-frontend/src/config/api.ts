@@ -12,6 +12,11 @@ export const API_ENDPOINTS = {
     LOGIN: `${API_BASE_URL}/api/auth/login`,
     REGISTER: `${API_BASE_URL}/api/auth/register`,
     ACTIVITY: `${API_BASE_URL}/api/auth/activity`,
+    PROFILE: `${API_BASE_URL}/api/auth/profile`,
+    STAFF_LIST: `${API_BASE_URL}/api/auth/staff`,
+    STAFF_BY_ID: (staffId: string) => `${API_BASE_URL}/api/auth/staff/${staffId}`,
+    UPDATE_STAFF_ROLE: (staffId: string) => `${API_BASE_URL}/api/auth/users/${staffId}/role`,
+    DELETE_STAFF: (staffId: string) => `${API_BASE_URL}/api/auth/staff/${staffId}`,
   },
 
   // Chat endpoints

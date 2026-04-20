@@ -91,7 +91,7 @@ export default function AdminDashboard() {
   const navItems = [
     { icon: LayoutDashboard, label: 'Tổng quan', href: '/admin' },
     { icon: MessageSquare, label: 'Danh sách Chat', href: '/chat-list' },
-    { icon: Users, label: 'Quản lý Nhân viên', href: '/admin' },
+    { icon: Users, label: 'Quản lý Nhân viên', href: '/admin/staff' },
     { icon: Settings, label: 'Cấu hình AI', href: '/admin' },
   ];
 

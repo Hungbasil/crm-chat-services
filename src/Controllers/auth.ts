@@ -72,3 +72,55 @@ export const updateStaffActivity = asyncHandler(
     }
   }
 );
+
+/**
+ * [GET] Staff List (Admin only)
+ */
+export const getStaffList = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    let searchTerm: string | undefined;
+    if (Array.isArray(req.query.search)) {
+      searchTerm = req.query.search[0] as string | undefined;
+    } else if (typeof req.query.search === 'string') {
+      searchTerm = req.query.search;
+    }
+
+    let role: string | undefined;
+    if (Array.isArray(req.query.role)) {
+      role = req.query.role[0] as string | undefined;
+    } else if (typeof req.query.role === 'string') {
+      role = req.query.role;
+    }
+
+    const result = await AuthService.getStaffList(searchTerm, role);
+    ResponseHandler.success(res, result.staff, result.message);
+  }
+);
+
+/**
+ * [GET] Staff Member By ID (Admin only)
+ */
+export const getStaffById = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const staffId = Array.isArray(req.params.staffId)
+      ? req.params.staffId[0]
+      : req.params.staffId;
+
+    const result = await AuthService.getStaffById(staffId);
+    ResponseHandler.success(res, result.staff, result.message);
+  }
+);
+
+/**
+ * [DELETE] Staff Member (Admin only)
+ */
+export const deleteStaff = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const staffId = Array.isArray(req.params.staffId)
+      ? req.params.staffId[0]
+      : req.params.staffId;
+
+    const result = await AuthService.deleteStaff(staffId);
+    ResponseHandler.success(res, result.staff, result.message);
+  }
+);

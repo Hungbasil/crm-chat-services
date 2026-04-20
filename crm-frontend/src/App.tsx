@@ -3,6 +3,7 @@ import Auth from './pages/Auth';
 import Chat from './pages/Chat';
 import ChatList from './pages/ChatList';
 import AdminDashboard from './pages/AdminDashboard';
+import StaffManagement from './pages/StaffManagement';
 import type { ReactNode } from 'react';
 
 // Component kiểm tra quyền: Có Token mới cho vào, không thì đuổi ra trang Login
@@ -56,6 +57,16 @@ function App() {
           element={
             <AdminRoute>
               <AdminDashboard />
+            </AdminRoute>
+          } 
+        />
+
+        {/* Staff Management Page */}
+        <Route 
+          path="/admin/staff" 
+          element={
+            <AdminRoute>
+              <StaffManagement />
             </AdminRoute>
           } 
         />
