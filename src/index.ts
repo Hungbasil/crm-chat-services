@@ -24,11 +24,13 @@ import authRoutes from './Routes/auth';
 import dashboardRoutes from './Routes/dashboard';
 import uploadRoutes from './Routes/upload';
 import chatRoutes from './Routes/chat';
+import aiConfigRoutes from './Routes/aiConfig';
 
 // Import services
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import pool from './config/db';
 import { ResponseHandler } from './common/response/ResponseHandler';
+import { AIConfigHelper } from './common/helpers/AIConfigHelper';
 
 // Validate configuration
 validateConfig();
@@ -87,17 +89,46 @@ app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/files', uploadRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/ai-config', aiConfigRoutes);
 
 // ============= SOCKET.IO =============
 async function analyzeMessageWithAI(
   messageId: string,
   content: string,
-  conversationId: string
+  conversationId: string,
+  staffId?: string
 ): Promise<void> {
   try {
-    const model = genAI.getGenerativeModel({ model: config.gemini.model });
+    // Load AI config (per-staff or global)
+    const aiConfig = await AIConfigHelper.loadConfigForStaff(staffId);
+    
+    // Check if sentiment analysis is enabled
+    if (!aiConfig.sentiment_analysis_enabled) {
+      logger.debug('Sentiment analysis disabled, skipping AI analysis');
+      return;
+    }
+
+    // Initialize Gemini model with config
+    const model = genAI.getGenerativeModel({
+      model: aiConfig.model_version,
+      generationConfig: {
+        temperature: aiConfig.temperature,
+        maxOutputTokens: aiConfig.max_tokens,
+        topP: aiConfig.top_p,
+        stopSequences: []
+      }
+    });
+
+    // Format system prompt based on tone
+    const systemPrompt = AIConfigHelper.formatSystemPrompt(
+      aiConfig.system_prompt,
+      aiConfig.tone,
+      aiConfig.language
+    );
 
     const prompt = `
+      ${systemPrompt}
+
       Phân tích tin nhắn của khách hàng sau: "${content}". 
       Hãy trả về kết quả định dạng JSON chuẩn xác với 2 trường:
       - "sentiment": Cảm xúc (Ví dụ: "tức giận", "hài lòng", "trung tính", "hỏi han").
@@ -105,7 +136,13 @@ async function analyzeMessageWithAI(
       Chỉ trả về JSON, không thêm bất kỳ văn bản nào khác.
     `;
 
-    const aiResult = await model.generateContent(prompt);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('AI analysis timeout')), aiConfig.timeout_ms)
+    );
+
+    const aiResultPromise = model.generateContent(prompt);
+
+    const aiResult = (await Promise.race([aiResultPromise, timeoutPromise])) as any;
     let aiText = aiResult.response.text();
 
     aiText = aiText.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -116,6 +153,19 @@ async function analyzeMessageWithAI(
       [aiAnalysisJson, messageId]
     );
 
+    // Check if auto-escalation is enabled and sentiment is negative
+    if (aiConfig.auto_escalation_enabled) {
+      const sentimentScore = aiAnalysisJson.sentiment_score || 0;
+      if (sentimentScore < aiConfig.escalation_threshold) {
+        logger.info('Auto-escalation triggered', {
+          messageId,
+          sentiment: aiAnalysisJson.sentiment,
+          score: sentimentScore
+        });
+        // TODO: Implement auto-escalation logic (assign to staff, notify, etc.)
+      }
+    }
+
     io.emit('ai_analyzed', {
       message_id: messageId,
       conversation_id: conversationId,
@@ -124,7 +174,9 @@ async function analyzeMessageWithAI(
 
     logger.info('AI analysis completed', {
       messageId,
-      sentiment: aiAnalysisJson.sentiment
+      sentiment: aiAnalysisJson.sentiment,
+      model: aiConfig.model_version,
+      staffId: staffId || 'global'
     });
   } catch (error: any) {
     logger.error('AI analysis failed', error);
@@ -176,7 +228,9 @@ io.on('connection', (socket) => {
       io.emit('receive_message', savedMessage);
 
       if (sender_type === 'CUSTOMER') {
-        analyzeMessageWithAI(savedMessage.id, content, conversation_id);
+        // Use staff config if staff is analyzing, otherwise use global
+        const staffId = userInfo.role === 'STAFF' ? userInfo.userId : undefined;
+        analyzeMessageWithAI(savedMessage.id, content, conversation_id, staffId);
       }
     } catch (error: any) {
       logger.error('Message handling failed', error);

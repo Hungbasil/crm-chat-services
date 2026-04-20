@@ -39,6 +39,16 @@ export const API_ENDPOINTS = {
     ACTIVE_CHATS: `${API_BASE_URL}/api/dashboard/active-chats`,
     SATISFACTION_RATE: `${API_BASE_URL}/api/dashboard/satisfaction-rate`,
   },
+
+  // AI Config endpoints
+  AI_CONFIG: {
+    GLOBAL: `${API_BASE_URL}/api/ai-config/config/global`,
+    STAFF: (staffId: string) => `${API_BASE_URL}/api/ai-config/config/staff/${staffId}`,
+    PRESETS: `${API_BASE_URL}/api/ai-config/presets`,
+    APPLY_PRESET: `${API_BASE_URL}/api/ai-config/presets/apply`,
+    AUDIT_LOGS: `${API_BASE_URL}/api/ai-config/audit-logs`,
+    RESET_STAFF: (staffId: string) => `${API_BASE_URL}/api/ai-config/config/staff/${staffId}`,
+  },
 };
 
 export default API_ENDPOINTS;

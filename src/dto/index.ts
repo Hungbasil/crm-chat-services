@@ -151,3 +151,97 @@ export interface ChannelStatsDTO {
   conversation_count: number;
   message_count: number;
 }
+
+/**
+ * AI Config DTOs
+ */
+
+export interface UpdateGlobalAIConfigDTO {
+  model_name?: string;
+  model_version?: string;
+  temperature?: number;
+  max_tokens?: number;
+  top_p?: number;
+  timeout_ms?: number;
+  system_prompt?: string;
+  tone?: 'professional' | 'friendly' | 'casual' | 'formal';
+  language?: string;
+  auto_response_enabled?: boolean;
+  auto_response_delay_ms?: number;
+  sentiment_analysis_enabled?: boolean;
+  auto_escalation_enabled?: boolean;
+  escalation_threshold?: number;
+}
+
+export interface UpdateStaffAIConfigDTO {
+  model_name?: string;
+  model_version?: string;
+  temperature?: number;
+  max_tokens?: number;
+  top_p?: number;
+  timeout_ms?: number;
+  system_prompt?: string;
+  tone?: 'professional' | 'friendly' | 'casual' | 'formal';
+  language?: string;
+  auto_response_enabled?: boolean;
+  auto_response_delay_ms?: number;
+  sentiment_analysis_enabled?: boolean;
+  auto_escalation_enabled?: boolean;
+  escalation_threshold?: number;
+}
+
+export interface AIConfigResponseDTO {
+  id: string;
+  model_name: string;
+  model_version: string;
+  temperature: number;
+  max_tokens: number;
+  top_p: number;
+  timeout_ms: number;
+  system_prompt: string;
+  tone: string;
+  language: string;
+  auto_response_enabled: boolean;
+  auto_response_delay_ms: number;
+  sentiment_analysis_enabled: boolean;
+  auto_escalation_enabled: boolean;
+  escalation_threshold: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIConfigPresetDTO {
+  id: string;
+  name: string;
+  description: string;
+  temperature: number;
+  max_tokens: number;
+  top_p: number;
+  timeout_ms: number;
+  system_prompt: string;
+  tone: string;
+  language: string;
+  auto_response_enabled: boolean;
+  auto_response_delay_ms: number;
+  sentiment_analysis_enabled: boolean;
+  auto_escalation_enabled: boolean;
+  escalation_threshold: number;
+  is_default: boolean;
+}
+
+export interface ApplyPresetDTO {
+  preset_id: string;
+  staff_id?: string; // If provided, apply to staff config, else apply to global
+}
+
+export interface AIConfigAuditLogDTO {
+  id: string;
+  config_type: 'global' | 'staff' | 'preset';
+  config_id: string;
+  changed_by: string;
+  action: 'create' | 'update' | 'delete';
+  old_values: Record<string, any>;
+  new_values: Record<string, any>;
+  reason?: string;
+  created_at: string;
+}
